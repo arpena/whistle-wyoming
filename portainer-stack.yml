@@ -1,0 +1,28 @@
+# Portainer stack for wyoming-whistle (Compose v2).
+# The image is built locally on this host (Portainer's web editor can't build):
+#   cd ~/whistle-wyoming && docker build -t whistle-wyoming:needle-3.2.8 .
+# In Portainer, set HA_TOKEN under "Environment variables" of the stack.
+name: wyoming-whistle
+
+services:
+  whistle:
+    image: whistle-wyoming:needle-3.2.8
+    pull_policy: never  # local image, not on any registry
+    container_name: wyoming-whistle
+    restart: unless-stopped
+    # Host network: HA (also host network) is reachable at 127.0.0.1:8123
+    network_mode: host
+    environment:
+      HA_URL: ${HA_URL:-http://127.0.0.1:8123}
+      HA_TOKEN: ${HA_TOKEN:?set HA_TOKEN in the stack environment variables}
+      WHISTLE_LANGUAGE: ${WHISTLE_LANGUAGE:-es}
+      WHISTLE_MAX_KEYWORDS: ${WHISTLE_MAX_KEYWORDS:-200}
+      WHISTLE_REFRESH: ${WHISTLE_REFRESH:-3600}
+      NEEDLE_TELEMETRY: "0"  # cactus-needle sends usage counts by default
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    volumes:
+      - whistle-cache:/root/.cache/cactus-needle
+
+volumes:
+  whistle-cache:
+    name: whistle-cache
