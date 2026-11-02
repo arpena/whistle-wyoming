@@ -64,3 +64,7 @@ In Home Assistant, add the **Wyoming Protocol** integration with host `127.0.0.1
   float32, so audio is converted first. Incoming audio of any rate/width/channels is converted to 16 kHz mono.
 - The engine holds one global model, so all inference runs on a single worker thread off the event loop.
 - Entity aliases come from `config/entity_registry/get_entries`; `config/entity_registry/list` omits them.
+
+## License
+
+MIT. Whistle itself (model and engine) is Apache-2.0, by Cactus Compute.
