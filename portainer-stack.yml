@@ -1,13 +1,10 @@
-# Portainer stack for wyoming-whistle (Compose v2).
-# The image is built locally on this host (Portainer's web editor can't build):
-#   cd ~/whistle-wyoming && docker build -t whistle-wyoming:needle-3.2.8 .
+# wyoming-whistle stack (Compose v2; works as a Portainer stack).
 # In Portainer, set HA_TOKEN under "Environment variables" of the stack.
 name: wyoming-whistle
 
 services:
   whistle:
-    image: whistle-wyoming:needle-3.2.8
-    pull_policy: never  # local image, not on any registry
+    image: ghcr.io/arpena/whistle-wyoming:latest  # linux/amd64 + linux/arm64
     container_name: wyoming-whistle
     restart: unless-stopped
     # Host network: HA (also host network) is reachable at 127.0.0.1:8123

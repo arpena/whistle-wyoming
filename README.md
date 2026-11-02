@@ -19,13 +19,10 @@ Languages: en, de, fr, es, it, nl, pl (Whistle's set). Default: `es`.
 
 ## Run
 
-The image isn't published to a registry. Build it on the Docker host:
+A prebuilt multi-arch image (linux/amd64 and linux/arm64, e.g. Raspberry Pi 4/5) is published at
+`ghcr.io/arpena/whistle-wyoming`. Tags: `latest` (main branch), `X.Y.Z` / `X.Y` (releases).
 
-```bash
-docker build -t whistle-wyoming:needle-3.2.8 .
-```
-
-Then deploy `portainer-stack.yml`, either as a Portainer stack (set `HA_TOKEN` under the stack's environment
+Deploy `portainer-stack.yml`, either as a Portainer stack (set `HA_TOKEN` under the stack's environment
 variables) or with Compose:
 
 ```bash
@@ -34,6 +31,8 @@ HA_TOKEN=... docker compose -f portainer-stack.yml up -d
 
 The stack uses host networking and expects Home Assistant at `http://127.0.0.1:8123`; change `HA_URL` if it lives
 elsewhere. On first start the engine and weights are downloaded from Hugging Face into the `whistle-cache` volume.
+
+To build the image yourself instead: `docker build -t whistle-wyoming .` and point `image:` at it.
 
 In Home Assistant, add the **Wyoming Protocol** integration with host `127.0.0.1` and port `10300`, then pick
 `whistle` as speech-to-text in your voice assistant pipeline.
