@@ -1,7 +1,8 @@
 # wyoming-whistle
 
 A [Wyoming protocol](https://github.com/OHF-Voice/wyoming) speech-to-text server for Home Assistant, built on
-[Cactus Whistle](https://huggingface.co/Cactus-Compute/whistle), a 16.9 MB STT model that runs on a CPU.
+[Cactus Whistle](https://huggingface.co/Cactus-Compute/whistle), a 16.9 MB STT model that runs on a CPU uses 
+[Cactus Compute](https://github.com/cactus-compute/cactus).
 
 Whistle supports keyword biasing. This server fills the keyword list from your Home Assistant install, so the
 names you actually say get favoured during decoding:
@@ -9,13 +10,14 @@ names you actually say get favoured during decoding:
 - the names of entities **exposed to Assist**, or their **aliases** when an entity has them (aliases are usually
   what people say, entity names are often technical);
 - area names and area aliases;
-- a base set of command words (`dime`, `enciende`, `apaga`, `qué`, `está`…). They're imperatives, not infinitives:
-  infinitives biased "apaga" into "apagar" in testing.
+- a base set of command words (e.g., `turn`, `switch`, `enciende`, `apaga`, `schalte`). These utilise imperatives rather than infinitives, as testing showed infinitives can cause unexpected biasing drift. For example, using the infinitive "apagar" wrongly biases the spoken imperative "apaga", just as using the infinitive "to turn" would skew the spoken imperative "turn".
 
 The list is read over the HA websocket API at startup and refreshed periodically. If HA can't be reached, the server
 keeps the previous list and keeps transcribing.
 
-Languages: en, de, fr, es, it, nl, pl (Whistle's set). Default: `es`.
+Whistle supports the following language codes: `en`, `de`, `fr`, `es`, `it`, `nl`, `pl`.
+
+The server loads the appropriate keyword biasing and stopword rules matching your configured language string from script argument: `--language` or environment variable: `WHISTLE_LANGUAGE`. Defaults to `en`.
 
 ## Run
 
@@ -43,7 +45,7 @@ In Home Assistant, add the **Wyoming Protocol** integration with host `127.0.0.1
 | --- | --- | --- |
 | `HA_URL` | `http://127.0.0.1:8123` | Home Assistant base URL |
 | `HA_TOKEN` | (required) | Long-lived access token, used to read the keywords |
-| `WHISTLE_LANGUAGE` | `es` | Default language if the pipeline doesn't send a supported one |
+| `WHISTLE_LANGUAGE` | `en` | Default language if the pipeline doesn't send a supported one |
 | `WHISTLE_MAX_KEYWORDS` | `200` | Cap on the keyword list (full phrases are kept first) |
 | `WHISTLE_REFRESH` | `3600` | Seconds between keyword refreshes (`0` = only at startup) |
 
@@ -59,7 +61,7 @@ In Home Assistant, add the **Wyoming Protocol** integration with host `127.0.0.1
 
 ## Implementation notes
 
-- `needle.transcribe()` takes a WAV path or float32 samples in [-1, 1]. Raw int16 bytes are silently misread as
+- `cactus.transcribe()` takes a WAV path or float32 samples in [-1, 1]. Raw int16 bytes are silently misread as
   float32, so audio is converted first. Incoming audio of any rate/width/channels is converted to 16 kHz mono.
 - The engine holds one global model, so all inference runs on a single worker thread off the event loop.
 - Entity aliases come from `config/entity_registry/get_entries`; `config/entity_registry/list` omits them.

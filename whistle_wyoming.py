@@ -11,8 +11,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
-import needle
-from needle.agent.whistle import LANGUAGES as _NEEDLE_LANGUAGES, SAMPLE_RATE
+import cactus
+from cactus.agent.whistle import LANGUAGES as _NEEDLE_LANGUAGES, SAMPLE_RATE
+
 from websockets.asyncio.client import connect
 from wyoming.asr import Transcribe, Transcript
 from wyoming.audio import AudioChunk, AudioChunkConverter, AudioStart, AudioStop
@@ -29,18 +30,89 @@ VOICE_DOMAINS = {
     "light", "switch", "climate", "cover", "media_player", "fan", "lock",
     "vacuum", "scene", "script", "input_boolean",
 }
-# What people actually say to Assist: imperatives and question words, not infinitives
-# (A/B test: infinitives biased "apaga" -> "apagar"; these forms fixed "enciende"/"encendida").
-BASE_KEYWORDS = {
-    "dime", "enciende", "prende", "apaga", "sube", "baja", "pon", "abre", "cierra",
-    "activa", "desactiva", "qué", "cuál", "cuánto", "está", "encendida", "encendido",
-    "apagada", "apagado", "hora",
-}
-# Short/function words that add noise to biasing.
-STOPWORDS = {
-    "del", "las", "los", "con", "para", "por", "una", "uno", "the", "and", "de", "la", "el",
+
+LANG_DATA = {
+    "en": {
+        "keywords": {
+            "tell", "turn", "switch", "on", "off", "up", "down", "open", "close",
+            "activate", "deactivate", "what", "which", "how", "is", "was",
+            "time", "temperature", "status", "set", "play", "pause", "stop",
+            "toggle", "lock", "unlock", "run", "execute", "weather", "lights",
+            "thermostat", "blind", "shade", "curtain", "door", "window", "fan"
+        },
+        "stopwords": {
+            "the", "and", "a", "an", "of", "to", "in", "for", "with", "on", "at", "by", "from", "please"
+        }
+    },
+    "es": {
+        "keywords": {
+            "dime", "enciende", "prende", "apaga", "sube", "baja", "pon", "abre", "cierra",
+            "activa", "desactiva", "qué", "cuál", "cuánto", "está", "encendida", "encendido",
+            "apagada", "apagado", "hora", "temperatura", "estado", "fija", "reproduce", "pausa",
+            "detén", "bloquea", "desbloquea", "ejecuta", "clima", "luces", "persiana", "puerta", "ventana"
+        },
+        "stopwords": {
+            "del", "las", "los", "con", "para", "por", "una", "uno", "de", "la", "el", "un", "por favor"
+        }
+    },
+    "de": {
+        "keywords": {
+            "schalte", "an", "aus", "auf", "zu", "wie", "ist", "zeit", "temperatur",
+            "aktiviere", "deaktiviere", "öffne", "schließe", "sperre", "entsperre", "starte", "stoppe",
+            "pausiere", "status", "grad", "wetter", "licht", "lampen", "rollo", "rollladen", "tür", "fenster", "lüfter"
+        },
+        "stopwords": {
+            "der", "die", "das", "ein", "eine", "und", "zu", "von", "mit", "für", "im", "in", "den", "dem", "bitte"
+        }
+    },
+    "fr": {
+        "keywords": {
+            "allume", "éteins", "eteins", "ouvre", "ferme", "active", "désactive", "desactive", "quel", "quelle", "temps", "heure",
+            "température", "temperature", "statut", "monte", "baisse", "mets", "lance", "arrête", "arrete", "verrouille", "déverrouille",
+            "météo", "meteo", "lumière", "lumiere", "lampe", "volet", "store", "porte", "fenêtre", "fenetre", "ventilateur"
+        },
+        "stopwords": {
+            "le", "la", "les", "un", "une", "de", "et", "en", "pour", "dans", "par", "du", "au", "aux", "s'il", "te", "plaît", "plait"
+        }
+    },
+    "it": {
+        "keywords": {
+            "accendi", "spegni", "apri", "chiudi", "attiva", "disattiva", "che", "quale", "ora", "tempo",
+            "temperatura", "stato", "alza", "abbassa", "imposta", "avvia", "ferma", "blocca", "sblocca",
+            "meteo", "luce", "luci", "tapparella", "tenda", "porta", "finestra", "ventilatore"
+        },
+        "stopwords": {
+            "il", "lo", "la", "i", "gli", "le", "un", "una", "di", "e", "per", "in", "da", "con", "su", "per", "favore"
+        }
+    },
+    "nl": {
+        "keywords": {
+            "zet", "doe", "schakel", "draai", "aan", "uit", "open", "dicht", "start", "stop",
+            "activeer", "deactiveer", "verhoog", "verlaag", "wat", "hoe", "hoeveel", "is", "was",
+            "tijd", "temperatuur", "status", "weer", "verlichting", "lamp", "knop", "omhoog", "omlaag",
+            "vergrendel", "ontgrendel", "rolluik", "gordijn", "deur", "raam", "ventilator"
+        },
+        "stopwords": {
+            "de", "het", "een", "en", "van", "in", "voor", "met", "op", "te", "om", "bij", "alsjeblieft"
+        }
+    },
+    "pl": {
+        "keywords": {
+            "włącz", "wyłącz", "otwórz", "zamknij", "aktywuj", "deaktywuj", "co", "jak", "czas", "godzina",
+            "temperatura", "status", "podnieś", "opuść", "ustaw", "graj", "pauza", "zatrzymaj", "zablokuj",
+            "odblokuj", "pogoda", "światło", "światła", "lampa", "roleta", "drzwi", "okno", "wentylator"
+        },
+        "stopwords": {
+            "i", "w", "z", "na", "do", "że", "o", "to", "a", "po", "za", "dla", "pod", "ze", "proszę"
+        }
+    }
 }
 
+# What people actually say to Assist: imperatives and question words, not infinitives
+# (A/B test: infinitives biased "apaga" -> "apagar"; these forms fixed "enciende"/"encendida").
+BASE_KEYWORDS = set()
+# Short/function words that add noise to biasing.
+STOPWORDS = set()
 
 def _split_words(text: str) -> list[str]:
     cleaned = re.sub(r"[^\w\s]", " ", text.lower())
@@ -182,7 +254,7 @@ class WhistleEventHandler(AsyncEventHandler):
             return True
 
         if AudioStop.is_type(event.type):
-            # needle wants float32 samples in [-1, 1]; raw bytes would be misread as float32.
+            # cactus wants float32 samples in [-1, 1]; raw bytes would be misread as float32.
             pcm = array.array("h")
             pcm.frombytes(bytes(self.audio))
             samples = array.array("f", (s / 32768.0 for s in pcm))
@@ -192,7 +264,7 @@ class WhistleEventHandler(AsyncEventHandler):
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(
                 self.executor,
-                partial(needle.transcribe, samples, language=self.language,
+                partial(cactus.transcribe, samples, language=self.language,
                         keywords=self.store.keywords or None),
             )
             text = (result.get("text") or "").strip()
@@ -211,13 +283,19 @@ class WhistleEventHandler(AsyncEventHandler):
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--uri", default="tcp://0.0.0.0:10300")
-    parser.add_argument("--language", default=os.getenv("WHISTLE_LANGUAGE", "es"), choices=LANGUAGES)
+    parser.add_argument("--language", default=os.getenv("WHISTLE_LANGUAGE", "en"), choices=LANGUAGES)
     parser.add_argument("--ha-url", default=os.getenv("HA_URL"))
     parser.add_argument("--max-keywords", type=int, default=int(os.getenv("WHISTLE_MAX_KEYWORDS", "200")))
     parser.add_argument("--refresh-interval", type=int, default=int(os.getenv("WHISTLE_REFRESH", "3600")),
                         help="Seconds between keyword refreshes from HA (0 = only at startup)")
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
+    
+    # Inject the language profile before init
+    lang_profile = LANG_DATA.get(args.language, LANG_DATA["en"])
+    BASE_KEYWORDS.update(lang_profile["keywords"])
+    STOPWORDS.update(lang_profile["stopwords"])
+    
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -230,7 +308,7 @@ async def main() -> None:
     # The engine holds one global model, so all inference goes through a single worker thread.
     executor = ThreadPoolExecutor(max_workers=1)
     await asyncio.get_running_loop().run_in_executor(
-        executor, partial(needle.transcribe, array.array("f", [0.0] * SAMPLE_RATE), language=args.language)
+        executor, partial(cactus.transcribe, array.array("f", [0.0] * SAMPLE_RATE), language=args.language)
     )
     _LOGGER.info("Whistle model loaded")
 
