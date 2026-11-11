@@ -56,8 +56,17 @@ In Home Assistant, add the **Wyoming Protocol** integration with host `127.0.0.1
 | `WHISTLE_MAX_KEYWORDS` | `200` | Cap on the keyword list (full phrases are kept first) |
 | `WHISTLE_REFRESH` | `3600` | Seconds between keyword refreshes (`0` = only at startup) |
 | `WHISTLE_EXTRA_KEYWORDS` | (empty) | Comma-separated words or phrases always added, e.g. `yerba, dulce de leche` |
+| `WHISTLE_SAVE_AUDIO` | (empty = off) | Directory to save every request in, e.g. `/recordings` (mount a volume there) |
+| `WHISTLE_SAVE_AUDIO_MAX` | `500` | Keep only the newest N recordings (`0` = no limit) |
 
 `CACTUS_TELEMETRY=0` is set in the stack: cactus-compute sends anonymous usage counts by default.
+
+### Saving recordings
+
+With `WHISTLE_SAVE_AUDIO` set, each request is saved as `<UTC timestamp>.wav` (the audio exactly as Whistle got
+it: 16 kHz, mono, 16-bit) plus a `.json` with the transcript, language, duration, inference time and the keyword
+list used. That is enough to replay real requests against another model or other settings. It records everything
+said after the wake word, so leave it off unless you need it.
 
 ## Tips
 

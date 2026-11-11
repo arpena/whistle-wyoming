@@ -8,8 +8,11 @@ import logging
 import os
 import re
 import time
+import wave
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from functools import partial
+from pathlib import Path
 
 import cactus
 from cactus.agent.whistle import LANGUAGES as _WHISTLE_LANGUAGES, SAMPLE_RATE
@@ -247,6 +250,30 @@ class KeywordStore:
             await self.refresh()
 
 
+def save_recording(directory: Path, max_files: int, pcm: bytes, meta: dict) -> Path:
+    """Write the audio exactly as Whistle got it (16 kHz mono 16-bit WAV) plus a JSON sidecar.
+
+    The sidecar keeps the transcript and the keyword list used, so a run can be replayed later
+    against another model or other settings. Only the newest `max_files` recordings are kept
+    (0 = no limit)."""
+    directory.mkdir(parents=True, exist_ok=True)
+    stem = directory / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
+    # Open the file first: if wave.open() itself fails, Python 3.12 logs a spurious __del__ traceback.
+    with open(stem.with_suffix(".wav"), "wb") as fh, wave.open(fh, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(SAMPLE_RATE)
+        wav.writeframes(pcm)
+    stem.with_suffix(".json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    if max_files > 0:
+        # Timestamped names sort chronologically.
+        for old in sorted(directory.glob("*.wav"))[:-max_files]:
+            old.unlink(missing_ok=True)
+            old.with_suffix(".json").unlink(missing_ok=True)
+    return stem.with_suffix(".wav")
+
+
 class WhistleEventHandler(AsyncEventHandler):
     def __init__(self, info: Info, args, store: KeywordStore, executor: ThreadPoolExecutor,
                  *handler_args, **handler_kwargs):
@@ -281,21 +308,36 @@ class WhistleEventHandler(AsyncEventHandler):
 
         if AudioStop.is_type(event.type):
             # cactus wants float32 samples in [-1, 1]; raw bytes would be misread as float32.
+            raw = bytes(self.audio)
             pcm = array.array("h")
-            pcm.frombytes(bytes(self.audio))
+            pcm.frombytes(raw)
             samples = array.array("f", (s / 32768.0 for s in pcm))
             self.audio = bytearray()
 
+            keywords = self.store.keywords
             start = time.monotonic()
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(
                 self.executor,
                 partial(cactus.transcribe, samples, language=self.language,
-                        keywords=self.store.keywords or None),
+                        keywords=keywords or None),
             )
+            elapsed_ms = (time.monotonic() - start) * 1000
             text = (result.get("text") or "").strip()
             _LOGGER.info("[%s] %.1fs audio -> %r (%.0f ms)", self.language,
-                         len(samples) / SAMPLE_RATE, text, (time.monotonic() - start) * 1000)
+                         len(samples) / SAMPLE_RATE, text, elapsed_ms)
+
+            if self.args.save_audio:
+                meta = {"text": text, "language": self.language,
+                        "seconds": round(len(samples) / SAMPLE_RATE, 2),
+                        "elapsed_ms": round(elapsed_ms), "keywords": keywords}
+                try:
+                    path = await asyncio.to_thread(save_recording, Path(self.args.save_audio),
+                                                   self.args.save_audio_max, raw, meta)
+                    _LOGGER.debug("Saved %s", path)
+                except OSError as err:
+                    # A full or read-only disk must not break voice commands.
+                    _LOGGER.error("Could not save the recording: %s", err)
             try:
                 await self.write_event(Transcript(text=text).event())
             except (ConnectionResetError, BrokenPipeError):
@@ -316,6 +358,10 @@ async def main() -> None:
                         help="Seconds between keyword refreshes from HA (0 = only at startup)")
     parser.add_argument("--extra-keywords", default=os.getenv("WHISTLE_EXTRA_KEYWORDS", ""),
                         help="Comma-separated keywords always added to the list")
+    parser.add_argument("--save-audio", default=os.getenv("WHISTLE_SAVE_AUDIO", ""),
+                        help="Directory to save each request's audio + transcript in (off when empty)")
+    parser.add_argument("--save-audio-max", type=int, default=int(os.getenv("WHISTLE_SAVE_AUDIO_MAX", "500")),
+                        help="Keep only the newest N recordings (0 = no limit)")
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
     
@@ -330,6 +376,9 @@ async def main() -> None:
     extra = parse_extra_keywords(args.extra_keywords)
     if extra:
         _LOGGER.info("Extra keywords: %s", sorted(extra))
+    if args.save_audio:
+        _LOGGER.info("Saving recordings to %s (newest %s kept)", args.save_audio,
+                     args.save_audio_max or "all")
     store = KeywordStore(args.ha_url, os.getenv("HA_TOKEN"), args.max_keywords, extra)
     await store.refresh()
     if args.refresh_interval > 0:
