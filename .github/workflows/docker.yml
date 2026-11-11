@@ -12,7 +12,7 @@ env:
 
 jobs:
   build:
-    # Native runners per arch: the needle engine is a platform binary fetched at runtime,
+    # Native runners per arch: the Cactus engine is a platform binary fetched at runtime,
     # so each image is smoke-tested on real hardware of its own architecture.
     strategy:
       matrix:
@@ -42,7 +42,7 @@ jobs:
 
       - name: Smoke test (load model, answer Wyoming Describe)
         run: |
-          docker run -d --name smoke -p 10300:10300 -e NEEDLE_TELEMETRY=0 whistle-wyoming:test
+          docker run -d --name smoke -p 10300:10300 -e CACTUS_TELEMETRY=0 whistle-wyoming:test
           for _ in $(seq 1 60); do
             docker logs smoke 2>&1 | grep -q "Listening on" && break
             sleep 2

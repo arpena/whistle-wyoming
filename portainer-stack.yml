@@ -12,14 +12,14 @@ services:
     environment:
       HA_URL: ${HA_URL:-http://127.0.0.1:8123}
       HA_TOKEN: ${HA_TOKEN:?set HA_TOKEN in the stack environment variables}
-      WHISTLE_LANGUAGE: ${WHISTLE_LANGUAGE:-es}
+      WHISTLE_LANGUAGE: ${WHISTLE_LANGUAGE:-en}
       WHISTLE_MAX_KEYWORDS: ${WHISTLE_MAX_KEYWORDS:-200}
       WHISTLE_REFRESH: ${WHISTLE_REFRESH:-3600}
       WHISTLE_EXTRA_KEYWORDS: ${WHISTLE_EXTRA_KEYWORDS:-}  # e.g. "yerba, dulce de leche"
-      NEEDLE_TELEMETRY: "0"  # cactus-needle sends usage counts by default
+      CACTUS_TELEMETRY: "0"  # cactus-compute sends usage counts by default
       HF_HUB_DISABLE_TELEMETRY: "1"
     volumes:
-      - whistle-cache:/root/.cache/cactus-needle
+      - whistle-cache:/root/.cache  # engine, model and Hugging Face cache
 
 volumes:
   whistle-cache:
