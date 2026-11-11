@@ -15,6 +15,7 @@ services:
       WHISTLE_LANGUAGE: ${WHISTLE_LANGUAGE:-es}
       WHISTLE_MAX_KEYWORDS: ${WHISTLE_MAX_KEYWORDS:-200}
       WHISTLE_REFRESH: ${WHISTLE_REFRESH:-3600}
+      WHISTLE_EXTRA_KEYWORDS: ${WHISTLE_EXTRA_KEYWORDS:-}  # e.g. "yerba, dulce de leche"
       NEEDLE_TELEMETRY: "0"  # cactus-needle sends usage counts by default
       HF_HUB_DISABLE_TELEMETRY: "1"
     volumes:

@@ -9,8 +9,12 @@ names you actually say get favoured during decoding:
 - the names of entities **exposed to Assist**, or their **aliases** when an entity has them (aliases are usually
   what people say, entity names are often technical);
 - area names and area aliases;
-- a base set of command words (`dime`, `enciende`, `apaga`, `qué`, `está`…). They're imperatives, not infinitives:
-  infinitives biased "apaga" into "apagar" in testing.
+- a base set of command words (`dime`, `enciende`, `apaga`, `qué`, `está`…, plus the to-do list verbs `agrega` /
+  `agregá`, `poné`, `sumá` and `lista`). They're imperatives, not infinitives: infinitives biased "apaga" into
+  "apagar" in testing;
+- any extra words you list in `WHISTLE_EXTRA_KEYWORDS`.
+
+The base and extra keywords are always kept; the HA-derived ones fill the rest of `WHISTLE_MAX_KEYWORDS`.
 
 The list is read over the HA websocket API at startup and refreshed periodically. If HA can't be reached, the server
 keeps the previous list and keeps transcribing.
@@ -46,6 +50,7 @@ In Home Assistant, add the **Wyoming Protocol** integration with host `127.0.0.1
 | `WHISTLE_LANGUAGE` | `es` | Default language if the pipeline doesn't send a supported one |
 | `WHISTLE_MAX_KEYWORDS` | `200` | Cap on the keyword list (full phrases are kept first) |
 | `WHISTLE_REFRESH` | `3600` | Seconds between keyword refreshes (`0` = only at startup) |
+| `WHISTLE_EXTRA_KEYWORDS` | (empty) | Comma-separated words or phrases always added, e.g. `yerba, dulce de leche` |
 
 `NEEDLE_TELEMETRY=0` is set in the stack: cactus-needle sends anonymous usage counts by default.
 

@@ -31,10 +31,15 @@ VOICE_DOMAINS = {
 }
 # What people actually say to Assist: imperatives and question words, not infinitives
 # (A/B test: infinitives biased "apaga" -> "apagar"; these forms fixed "enciende"/"encendida").
+# The to-do list verbs are the ones HA's Spanish HassListAddItem sentences accept; both the tú
+# ("agrega") and the voseo ("agregá") imperatives are in, as HA matches both. A real-voice
+# "agregá" came out as "Averigá" / "Airega" without them. "añadí"/"añade" are left out on purpose:
+# in an A/B test with synthetic speech they leaked into unrelated commands ("…lo añadí todos").
 BASE_KEYWORDS = {
     "dime", "enciende", "prende", "apaga", "sube", "baja", "pon", "abre", "cierra",
     "activa", "desactiva", "qué", "cuál", "cuánto", "está", "encendida", "encendido",
     "apagada", "apagado", "hora",
+    "agrega", "agregá", "poné", "sumá", "lista",
 }
 # Short/function words that add noise to biasing.
 STOPWORDS = {
@@ -84,8 +89,22 @@ def _add_name(keywords: set[str], name: str | None) -> None:
         keywords.update(_split_words(name))
 
 
-async def fetch_ha_keywords(ha_url: str, token: str, max_keywords: int) -> list[str]:
-    """Names + aliases of entities exposed to Assist, plus area names + aliases."""
+def parse_extra_keywords(value: str | None) -> set[str]:
+    """Comma-separated keywords from WHISTLE_EXTRA_KEYWORDS, e.g. "yerba, dulce de leche"."""
+    return {k.strip().lower() for k in (value or "").split(",") if k.strip()}
+
+
+def _rank(keywords: set[str]) -> list[str]:
+    # Full phrases (more words) first.
+    return sorted(keywords, key=lambda k: (-len(k.split()), k))
+
+
+async def fetch_ha_keywords(ha_url: str, token: str, max_keywords: int,
+                            fixed: set[str] = frozenset()) -> list[str]:
+    """Names + aliases of entities exposed to Assist, plus area names + aliases.
+
+    `fixed` keywords (base + extra) are always kept; the HA-derived ones fill the rest of
+    `max_keywords`, so a growing install can't push the command words out."""
     exposure, areas, states = await _ha_ws_fetch(ha_url, token, [
         "homeassistant/expose_entity/list",
         "config/area_registry/list",
@@ -102,7 +121,7 @@ async def fetch_ha_keywords(ha_url: str, token: str, max_keywords: int) -> list[
     (entries,) = await _ha_ws_fetch(ha_url, token, [
         {"type": "config/entity_registry/get_entries", "entity_ids": sorted(exposed)},
     ])
-    keywords: set[str] = set(BASE_KEYWORDS)
+    keywords: set[str] = set()
     # Aliases are what people actually say; when an entity has them, skip its (often technical) name.
     aliases_by_entity = {
         entity_id: [a for a in (entry.get("aliases") or []) if a]
@@ -123,22 +142,26 @@ async def fetch_ha_keywords(ha_url: str, token: str, max_keywords: int) -> list[
             if name:
                 keywords.add(name.strip().lower())
 
-    _LOGGER.info("%d entities exposed to Assist -> %d keywords", len(exposed), len(keywords))
-    # Prefer full phrases (longer) when trimming.
-    return sorted(keywords, key=lambda k: (-len(k.split()), k))[:max_keywords]
+    from_ha = keywords - fixed
+    _LOGGER.info("%d entities exposed to Assist -> %d keywords (+ %d base/extra)",
+                 len(exposed), len(from_ha), len(fixed))
+    kept = set(_rank(from_ha)[:max(0, max_keywords - len(fixed))])
+    return _rank(kept | fixed)
 
 
 class KeywordStore:
-    def __init__(self, ha_url: str | None, token: str | None, max_keywords: int):
+    def __init__(self, ha_url: str | None, token: str | None, max_keywords: int,
+                 extra: set[str] = frozenset()):
         self.ha_url, self.token, self.max_keywords = ha_url, token, max_keywords
-        self.keywords: list[str] = sorted(BASE_KEYWORDS)
+        self.fixed = set(BASE_KEYWORDS) | set(extra)
+        self.keywords: list[str] = _rank(self.fixed)
 
     async def refresh(self) -> None:
         if not (self.ha_url and self.token):
-            _LOGGER.warning("HA_URL/HA_TOKEN not set: using only base keywords")
+            _LOGGER.warning("HA_URL/HA_TOKEN not set: using only base/extra keywords")
             return
         try:
-            self.keywords = await fetch_ha_keywords(self.ha_url, self.token, self.max_keywords)
+            self.keywords = await fetch_ha_keywords(self.ha_url, self.token, self.max_keywords, self.fixed)
             _LOGGER.info("Loaded %d keywords from HA, e.g. %s", len(self.keywords), self.keywords[:10])
         except Exception as err:
             _LOGGER.error("Keyword refresh from HA failed (keeping previous list): %s", err)
@@ -216,12 +239,17 @@ async def main() -> None:
     parser.add_argument("--max-keywords", type=int, default=int(os.getenv("WHISTLE_MAX_KEYWORDS", "200")))
     parser.add_argument("--refresh-interval", type=int, default=int(os.getenv("WHISTLE_REFRESH", "3600")),
                         help="Seconds between keyword refreshes from HA (0 = only at startup)")
+    parser.add_argument("--extra-keywords", default=os.getenv("WHISTLE_EXTRA_KEYWORDS", ""),
+                        help="Comma-separated keywords always added to the list")
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
-    store = KeywordStore(args.ha_url, os.getenv("HA_TOKEN"), args.max_keywords)
+    extra = parse_extra_keywords(args.extra_keywords)
+    if extra:
+        _LOGGER.info("Extra keywords: %s", sorted(extra))
+    store = KeywordStore(args.ha_url, os.getenv("HA_TOKEN"), args.max_keywords, extra)
     await store.refresh()
     if args.refresh_interval > 0:
         asyncio.create_task(store.refresh_forever(args.refresh_interval))
