@@ -40,6 +40,11 @@ VOICE_DOMAINS = {
 # ("agrega") and the voseo ("agregá") imperatives are in, as HA matches both. A real-voice
 # "agregá" came out as "Averigá" / "Airega" without them. "añadí"/"añade" are left out on purpose:
 # in an A/B test with synthetic speech they leaked into unrelated commands ("…lo añadí todos").
+# Voseo imperatives (encendé, subí, decime…) are in too: on real Rioplatense recordings Whistle
+# wrote "Encendida pava" / "Subió el volumen" / "Reproduce y música" without them, and HA only
+# matches the accented forms ("subi" without the accent fails). With them, 7 of 9 voseo commands
+# came out right and nothing else changed. "música" was tried and left out: it leaked into
+# transcripts of background noise ("Está música para música").
 # "the"/"and" stay Spanish stopwords: entity names are often in English.
 LANG_DATA = {
     "en": {
@@ -61,7 +66,9 @@ LANG_DATA = {
             "apagada", "apagado", "hora",
             "agrega", "agregá", "poné", "sumá", "lista",
             "temperatura", "estado", "fija", "reproduce", "pausa",
-            "detén", "bloquea", "desbloquea", "ejecuta", "clima", "luces", "persiana", "puerta", "ventana"
+            "detén", "bloquea", "desbloquea", "ejecuta", "clima", "luces", "persiana", "puerta", "ventana",
+            "encendé", "prendé", "apagá", "subí", "bajá", "decime", "reproducí", "pausá",
+            "aumentá", "abrí", "cerrá", "activá", "desactivá", "volumen"
         },
         "stopwords": {
             "del", "las", "los", "con", "para", "por", "una", "uno", "de", "la", "el", "un",
