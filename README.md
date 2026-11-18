@@ -11,7 +11,7 @@ names you actually say get favoured during decoding:
   what people say, entity names are often technical);
 - area names and area aliases;
 - a base set of command words for the configured language (e.g. `turn`, `switch` in English; `enciende`, `apaga`
-  and the to-do list verbs `agrega` / `agregá`, `poné`, `sumá` in Spanish; `schalte` in German). They're
+  the voseo forms (`encendé`, `subí`, `decime`…) and the to-do list verbs `agrega` / `agregá`, `poné`, `sumá` in Spanish; `schalte` in German). They're
   imperatives, not infinitives: in testing, the infinitive "apagar" pulled the spoken imperative "apaga" toward
   "apagar";
 - any extra words you list in `WHISTLE_EXTRA_KEYWORDS`.
